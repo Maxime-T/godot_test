@@ -55,6 +55,7 @@
 #include "editor/inspector/multi_node_edit.h"
 #include "editor/scene/3d/node_3d_editor_plugin.h"
 #include "editor/scene/canvas_item_editor_plugin.h"
+#include "editor/scene/refactor_unique_name_dialog.h"
 #include "editor/scene/rename_dialog.h"
 #include "editor/scene/reparent_dialog.h"
 #include "editor/script/script_editor_plugin.h"
@@ -1944,6 +1945,10 @@ void SceneTreeDock::_node_selected() {
 
 void SceneTreeDock::_node_renamed() {
 	_node_selected();
+}
+
+void SceneTreeDock::_node_unique_renamed(Node *p_node, const StringName &p_old_name) {
+	refactor_unique_name_dialog->add_refactor(p_old_name, p_node->get_name());
 }
 
 void SceneTreeDock::_set_owners(Node *p_owner, const Array &p_nodes) {
@@ -5073,6 +5078,7 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 	scene_tree->connect("node_selected", callable_mp(this, &SceneTreeDock::_node_selected), CONNECT_DEFERRED);
 	scene_tree->connect("node_renamed", callable_mp(this, &SceneTreeDock::_node_renamed), CONNECT_DEFERRED);
 	scene_tree->connect("node_prerename", callable_mp(this, &SceneTreeDock::_node_prerenamed));
+	scene_tree->connect("node_unique_renamed", callable_mp(this, &SceneTreeDock::_node_unique_renamed), CONNECT_DEFERRED);
 	scene_tree->connect("open", callable_mp(this, &SceneTreeDock::_load_request));
 	scene_tree->connect("open_script", callable_mp(this, &SceneTreeDock::_script_open_request));
 	scene_tree->connect("nodes_rearranged", callable_mp(this, &SceneTreeDock::_nodes_dragged));
@@ -5102,6 +5108,9 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 
 	rename_dialog = memnew(RenameDialog(scene_tree));
 	add_child(rename_dialog);
+
+	refactor_unique_name_dialog = memnew(RefactorUniqueNameDialog);
+	add_child(refactor_unique_name_dialog);
 
 	script_create_dialog = memnew(ScriptCreateDialog);
 	script_create_dialog->set_inheritance_base_type("Node");
