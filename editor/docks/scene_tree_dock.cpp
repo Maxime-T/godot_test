@@ -2855,6 +2855,9 @@ void SceneTreeDock::_toggle_editable_children(Node *p_node) {
 	undo_redo->commit_action();
 }
 
+void SceneTreeDock::_refactor_unique_name() {
+}
+
 void SceneTreeDock::_delete_confirm(bool p_cut) {
 	List<Node *> remove_list = editor_selection->get_top_selected_node_list();
 
@@ -5103,9 +5106,6 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 
 	rename_dialog = memnew(RenameDialog(scene_tree));
 	add_child(rename_dialog);
-
-	refactor_unique_name_dialog = memnew(RefactorUniqueNameDialog);
-	add_child(refactor_unique_name_dialog);
 
 	script_create_dialog = memnew(ScriptCreateDialog);
 	script_create_dialog->set_inheritance_base_type("Node");

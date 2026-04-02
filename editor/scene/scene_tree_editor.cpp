@@ -2149,7 +2149,6 @@ void SceneTreeEditor::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("node_selected"));
 	ADD_SIGNAL(MethodInfo("node_renamed"));
 	ADD_SIGNAL(MethodInfo("node_prerename"));
-	ADD_SIGNAL(MethodInfo("node_unique_renamed", PropertyInfo(Variant::OBJECT, "node"), PropertyInfo(Variant::STRING_NAME, "old_name")));
 	ADD_SIGNAL(MethodInfo("node_changed"));
 	ADD_SIGNAL(MethodInfo("nodes_dragged"));
 	ADD_SIGNAL(MethodInfo("nodes_rearranged", PropertyInfo(Variant::ARRAY, "paths"), PropertyInfo(Variant::NODE_PATH, "to_path"), PropertyInfo(Variant::INT, "type")));

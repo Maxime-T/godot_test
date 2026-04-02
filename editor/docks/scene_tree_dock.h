@@ -218,11 +218,12 @@ class SceneTreeDock : public EditorDock {
 
 	void _node_selected();
 	void _node_renamed();
-	void _node_unique_renamed(Node *p_node, const StringName &p_old_name);
 	void _script_created(Ref<Script> p_script);
 	void _shader_created(Ref<Shader> p_shader);
 	void _script_creation_closed();
 	void _shader_creation_closed();
+
+	void _refactor_unique_name();
 
 	void _delete_confirm(bool p_cut = false);
 	void _delete_dialog_closed();
