@@ -1939,6 +1939,12 @@ void SceneTreeDock::_node_renamed() {
 	_node_selected();
 }
 
+void SceneTreeDock::_node_unique_renamed() {
+	printf("Unique renamed\n");
+	refactor_unique_name_dialog_label->set_text("Unique renamed\n");
+	refactor_unique_name_dialog->popup_centered();
+}
+
 void SceneTreeDock::_set_owners(Node *p_owner, const Array &p_nodes) {
 	for (int i = 0; i < p_nodes.size(); i++) {
 		Node *n = Object::cast_to<Node>(p_nodes[i]);
@@ -2841,6 +2847,9 @@ void SceneTreeDock::_toggle_editable_children(Node *p_node) {
 	undo_redo->add_do_method(scene_tree, "update_tree");
 
 	undo_redo->commit_action();
+}
+
+void SceneTreeDock::_refactor_unique_name() {
 }
 
 void SceneTreeDock::_delete_confirm(bool p_cut) {
@@ -5057,6 +5066,7 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 	scene_tree->connect("node_selected", callable_mp(this, &SceneTreeDock::_node_selected), CONNECT_DEFERRED);
 	scene_tree->connect("node_renamed", callable_mp(this, &SceneTreeDock::_node_renamed), CONNECT_DEFERRED);
 	scene_tree->connect("node_prerename", callable_mp(this, &SceneTreeDock::_node_prerenamed));
+	scene_tree->connect("node_unique_renamed", callable_mp(this, &SceneTreeDock::_node_unique_renamed), CONNECT_DEFERRED);
 	scene_tree->connect("open", callable_mp(this, &SceneTreeDock::_load_request));
 	scene_tree->connect("open_script", callable_mp(this, &SceneTreeDock::_script_open_request));
 	scene_tree->connect("nodes_rearranged", callable_mp(this, &SceneTreeDock::_nodes_dragged));
@@ -5086,6 +5096,15 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 
 	rename_dialog = memnew(RenameDialog(scene_tree));
 	add_child(rename_dialog);
+
+	refactor_unique_name_dialog = memnew(ConfirmationDialog);
+	refactor_unique_name_dialog->set_ok_button_text(TTRC("Rename in scripts"));
+	add_child(refactor_unique_name_dialog);
+	refactor_unique_name_dialog->connect(SceneStringName(confirmed), callable_mp(this, &SceneTreeDock::_refactor_unique_name));
+
+	refactor_unique_name_dialog_label = memnew(Label);
+	refactor_unique_name_dialog_label->set_focus_mode(FOCUS_ACCESSIBILITY);
+	refactor_unique_name_dialog->add_child(refactor_unique_name_dialog_label);
 
 	script_create_dialog = memnew(ScriptCreateDialog);
 	script_create_dialog->set_inheritance_base_type("Node");
