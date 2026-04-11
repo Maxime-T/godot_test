@@ -30,10 +30,12 @@
 
 #include "refactor_unique_name_dialog.h"
 
+#include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
 #include "core/object/script_language.h"
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
+#include "editor/script/script_editor_plugin.h"
 #include "scene/main/scene_tree.h"
 
 #include <editor/themes/editor_scale.h>
@@ -99,16 +101,30 @@ Node *RefactorUniqueNameDialog::get_scene_root() const {
 }
 
 void RefactorUniqueNameDialog::_refactor_unique_name(RefactorData refactor_data) {
+	ScriptEditor::get_singleton()->apply_scripts();
+
+	Vector<Node *> selected_nodes = scene_tree_selector->get_selected_nodes();
 	for (int i = 0; i < refactor_data.nodes_to_consider.size(); i++) {
 		Node *n = Object::cast_to<Node>(ObjectDB::get_instance(refactor_data.nodes_to_consider[i]));
-		if (!n) {
+		if (!n || !selected_nodes.has(n)) {
 			continue;
 		}
 
-		if (!n->get_script().is_null()) {
-			//TODO
+		Ref<Script> script = n->get_script();
+		if (script.is_valid()) {
+			String source = script->get_source_code();
+			String old_str = "%" + String(refactor_data.old_name);
+			String new_str = "%" + String(refactor_data.new_name);
+			if (source.contains(old_str)) {
+				source = source.replace(old_str, new_str);
+				script->set_source_code(source);
+				ResourceSaver::save(script, script->get_path());
+				script->reload();
+			}
 		}
 	}
+
+	ScriptEditor::get_singleton()->reload_scripts();
 }
 
 void RefactorUniqueNameDialog::_notification(int p_what) {
@@ -131,6 +147,9 @@ void RefactorUniqueNameDialog::_notification(int p_what) {
 
 Vector<ObjectID> RefactorUniqueNameDialog::_get_nodes_to_refactor(const StringName &p_old_name) {
 	ERR_FAIL_NULL_V(get_scene_root(), Vector<ObjectID>());
+
+	ScriptEditor::get_singleton()->apply_scripts();
+
 	Vector<ObjectID> nodes_to_refactor;
 	LocalVector<Node *> stack;
 
