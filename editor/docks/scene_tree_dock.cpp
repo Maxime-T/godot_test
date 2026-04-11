@@ -51,6 +51,7 @@
 #include "editor/file_system/editor_paths.h"
 #include "editor/gui/editor_file_dialog.h"
 #include "editor/gui/editor_quick_open_dialog.h"
+#include "editor/gui/refactor_unique_name_dialog.h"
 #include "editor/inspector/editor_context_menu_plugin.h"
 #include "editor/inspector/multi_node_edit.h"
 #include "editor/scene/3d/node_3d_editor_plugin.h"
@@ -1946,10 +1947,8 @@ void SceneTreeDock::_node_renamed() {
 	_node_selected();
 }
 
-void SceneTreeDock::_node_unique_renamed() {
-	printf("Unique renamed\n");
-	refactor_unique_name_dialog_label->set_text("Unique renamed\n");
-	refactor_unique_name_dialog->popup_centered();
+void SceneTreeDock::_node_unique_renamed(Node *p_node, const StringName &p_old_name) {
+	refactor_unique_name_dialog->add_refactor(p_old_name, p_node->get_name());
 }
 
 void SceneTreeDock::_set_owners(Node *p_owner, const Array &p_nodes) {
@@ -2854,9 +2853,6 @@ void SceneTreeDock::_toggle_editable_children(Node *p_node) {
 	undo_redo->add_do_method(scene_tree, "update_tree");
 
 	undo_redo->commit_action();
-}
-
-void SceneTreeDock::_refactor_unique_name() {
 }
 
 void SceneTreeDock::_delete_confirm(bool p_cut) {
@@ -5108,14 +5104,8 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 	rename_dialog = memnew(RenameDialog(scene_tree));
 	add_child(rename_dialog);
 
-	refactor_unique_name_dialog = memnew(ConfirmationDialog);
-	refactor_unique_name_dialog->set_ok_button_text(TTRC("Rename in scripts"));
+	refactor_unique_name_dialog = memnew(RefactorUniqueNameDialog(scene_root));
 	add_child(refactor_unique_name_dialog);
-	refactor_unique_name_dialog->connect(SceneStringName(confirmed), callable_mp(this, &SceneTreeDock::_refactor_unique_name));
-
-	refactor_unique_name_dialog_label = memnew(Label);
-	refactor_unique_name_dialog_label->set_focus_mode(FOCUS_ACCESSIBILITY);
-	refactor_unique_name_dialog->add_child(refactor_unique_name_dialog_label);
 
 	script_create_dialog = memnew(ScriptCreateDialog);
 	script_create_dialog->set_inheritance_base_type("Node");

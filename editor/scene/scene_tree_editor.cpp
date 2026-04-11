@@ -1645,9 +1645,10 @@ void SceneTreeEditor::rename_node(Node *p_node, const String &p_name, TreeItem *
 
 		emit_signal(SNAME("node_prerename"), p_node, new_name);
 
-		undo_redo->add_undo_method(p_node, "set_name", p_node->get_name());
+		StringName old_name = p_node->get_name();
+		undo_redo->add_undo_method(p_node, "set_name", old_name);
 		undo_redo->add_undo_method(item, "set_metadata", 0, p_node->get_path());
-		undo_redo->add_undo_method(item, "set_text", 0, p_node->get_name());
+		undo_redo->add_undo_method(item, "set_text", 0, old_name);
 
 		undo_redo->add_do_method(p_node, "set_name", new_name);
 		undo_redo->add_do_method(item, "set_metadata", 0, p_node->get_path());
@@ -1658,7 +1659,7 @@ void SceneTreeEditor::rename_node(Node *p_node, const String &p_name, TreeItem *
 		}
 
 		if (node_was_unique_name) {
-			emit_signal(SNAME("node_unique_renamed"));
+			emit_signal(SNAME("node_unique_renamed"), p_node, old_name);
 		}
 
 		undo_redo->commit_action();
@@ -2148,7 +2149,7 @@ void SceneTreeEditor::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("node_selected"));
 	ADD_SIGNAL(MethodInfo("node_renamed"));
 	ADD_SIGNAL(MethodInfo("node_prerename"));
-	ADD_SIGNAL(MethodInfo("node_unique_renamed"));
+	ADD_SIGNAL(MethodInfo("node_unique_renamed", PropertyInfo(Variant::OBJECT, "node"), PropertyInfo(Variant::STRING_NAME, "old_name")));
 	ADD_SIGNAL(MethodInfo("node_changed"));
 	ADD_SIGNAL(MethodInfo("nodes_dragged"));
 	ADD_SIGNAL(MethodInfo("nodes_rearranged", PropertyInfo(Variant::ARRAY, "paths"), PropertyInfo(Variant::NODE_PATH, "to_path"), PropertyInfo(Variant::INT, "type")));
