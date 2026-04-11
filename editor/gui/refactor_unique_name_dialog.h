@@ -32,30 +32,59 @@
 
 #include "editor/scene/scene_tree_editor.h"
 
+class SceneTreeSelector : public Control {
+	GDCLASS(SceneTreeSelector, Control);
+
+	Tree *scene_tree = nullptr;
+	Node *scene_root = nullptr;
+	AHashMap<ObjectID, ObjectID> item_node_map;
+	AHashMap<ObjectID, ObjectID> node_item_map;
+
+	Vector<ObjectID> selected_nodes;
+	Vector<ObjectID> selectable_nodes;
+
+	void _add_item(Node *p_parent, Node *p_node, int p_index);
+
+	void _on_item_edited();
+
+	void _reset();
+	void _update_subtree(Node *p_node);
+
+public:
+	void clear();
+	void create(Node *p_root, Vector<ObjectID> p_selectable_nodes);
+	Vector<Node *> get_selected_nodes() const;
+	SceneTreeSelector();
+};
+
 class RefactorUniqueNameDialog : public ConfirmationDialog {
 	GDCLASS(RefactorUniqueNameDialog, ConfirmationDialog);
 
 	struct RefactorData {
+		Vector<ObjectID> nodes_to_consider;
 		StringName old_name;
 		StringName new_name;
 	};
 
-	Node *scene_root = nullptr;
-
 	Vector<RefactorData> refactor_queue;
 	Label *label = nullptr;
 
-	void _next();
-	void _refactor_unique_name(RefactorData refactor_data, const TypedArray<NodePath> &p_paths);
+	SceneTreeSelector *scene_tree_selector = nullptr;
 
-protected:
-	static void _bind_methods();
+	Node *get_scene_root() const;
+
+	void _next();
+	void _refactor_unique_name(RefactorData p_refactor_data);
+	void _notification(int p_what);
+	Vector<ObjectID> _get_nodes_to_refactor(const StringName &p_old_name);
 
 public:
+	void popup_refactor();
+
 	virtual void cancel_pressed() override;
 	virtual void ok_pressed() override;
 
 	void add_refactor(const StringName &p_old_name, const StringName &p_new_name);
 
-	RefactorUniqueNameDialog(Node *p_root);
+	RefactorUniqueNameDialog();
 };

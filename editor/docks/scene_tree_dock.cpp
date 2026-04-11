@@ -5104,7 +5104,7 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 	rename_dialog = memnew(RenameDialog(scene_tree));
 	add_child(rename_dialog);
 
-	refactor_unique_name_dialog = memnew(RefactorUniqueNameDialog(scene_root));
+	refactor_unique_name_dialog = memnew(RefactorUniqueNameDialog);
 	add_child(refactor_unique_name_dialog);
 
 	script_create_dialog = memnew(ScriptCreateDialog);
