@@ -31,21 +31,26 @@
 #pragma once
 
 #include "editor/scene/scene_tree_editor.h"
+#include "scene/gui/box_container.h"
+#include "scene/gui/check_box.h"
 
-class SceneTreeSelector : public Control {
-	GDCLASS(SceneTreeSelector, Control);
+class SceneTreeSelector : public VBoxContainer {
+	GDCLASS(SceneTreeSelector, VBoxContainer);
 
 	Tree *scene_tree = nullptr;
+	CheckBox *select_all_checkbox = nullptr;
 	Node *scene_root = nullptr;
 	AHashMap<ObjectID, ObjectID> item_node_map;
 	AHashMap<ObjectID, ObjectID> node_item_map;
 
 	Vector<ObjectID> selected_nodes;
 	Vector<ObjectID> selectable_nodes;
+	HashSet<ObjectID> marked_nodes;
 
 	void _add_item(Node *p_parent, Node *p_node, int p_index);
 
 	void _on_item_edited();
+	void _on_select_all_toggled(bool p_pressed);
 
 	void _reset();
 	void _update_subtree(Node *p_node);
@@ -53,6 +58,7 @@ class SceneTreeSelector : public Control {
 public:
 	void clear();
 	void create(Node *p_root, Vector<ObjectID> p_selectable_nodes);
+	void set_marked(const HashSet<ObjectID> &p_marked);
 	Vector<Node *> get_selected_nodes() const;
 	SceneTreeSelector();
 };

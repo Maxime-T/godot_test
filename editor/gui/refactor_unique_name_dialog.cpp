@@ -118,6 +118,12 @@ void RefactorUniqueNameDialog::_notification(int p_what) {
 				return;
 			}
 			const RefactorData &refactor_data = refactor_queue[0];
+			Node *renamed_node = get_scene_root()->get_node_or_null("%" + String(refactor_data.new_name));
+			HashSet<ObjectID> marked;
+			if (renamed_node) {
+				marked.insert(renamed_node->get_instance_id());
+			}
+			scene_tree_selector->set_marked(marked);
 			scene_tree_selector->create(get_scene_root(), refactor_data.nodes_to_consider);
 		} break;
 	}
@@ -169,6 +175,18 @@ void SceneTreeSelector::_add_item(Node *p_parent, Node *p_node, int p_index) {
 	}
 	item->set_text(0, p_node->get_name());
 	item->set_icon(0, EditorNode::get_singleton()->get_object_icon(p_node));
+
+	Ref<Script> scr = p_node->get_script();
+	if (scr.is_valid()) {
+		item->add_button(0, get_editor_theme_icon(SNAME("Script")));
+		item->set_button_disabled(0, item->get_button_count(0) - 1, true);
+	}
+
+	if (marked_nodes.has(p_node->get_instance_id())) {
+		item->set_custom_color(0, get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
+	} else if (!selectable_nodes.has(p_node->get_instance_id())) {
+		item->set_custom_color(0, get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
+	}
 }
 
 void SceneTreeSelector::_on_item_edited() {
@@ -186,6 +204,21 @@ void SceneTreeSelector::_on_item_edited() {
 			selected_nodes.push_back(id);
 		} else {
 			selected_nodes.erase(id);
+		}
+	}
+}
+
+void SceneTreeSelector::_on_select_all_toggled(bool p_pressed) {
+	selected_nodes.clear();
+	for (const KeyValue<ObjectID, ObjectID> &E : node_item_map) {
+		if (selectable_nodes.has(E.key)) {
+			TreeItem *item = Object::cast_to<TreeItem>(ObjectDB::get_instance(E.value));
+			if (item) {
+				item->set_checked(0, p_pressed);
+			}
+			if (p_pressed) {
+				selected_nodes.push_back(E.key);
+			}
 		}
 	}
 }
@@ -216,6 +249,12 @@ void SceneTreeSelector::create(Node *p_root, Vector<ObjectID> p_selectable_nodes
 	scene_root = p_root;
 	selectable_nodes = p_selectable_nodes;
 	_reset();
+	select_all_checkbox->set_pressed_no_signal(true);
+	_on_select_all_toggled(true);
+}
+
+void SceneTreeSelector::set_marked(const HashSet<ObjectID> &p_marked) {
+	marked_nodes = p_marked;
 }
 
 Vector<Node *> SceneTreeSelector::get_selected_nodes() const {
@@ -231,10 +270,15 @@ Vector<Node *> SceneTreeSelector::get_selected_nodes() const {
 }
 
 SceneTreeSelector::SceneTreeSelector() {
+	select_all_checkbox = memnew(CheckBox);
+	select_all_checkbox->set_text(TTR("Select All"));
+	add_child(select_all_checkbox);
+	select_all_checkbox->connect(SceneStringName(toggled), callable_mp(this, &SceneTreeSelector::_on_select_all_toggled));
+
 	scene_tree = memnew(Tree);
 	scene_tree->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-	scene_tree->set_anchor(SIDE_RIGHT, ANCHOR_END);
-	scene_tree->set_anchor(SIDE_BOTTOM, ANCHOR_END);
+	scene_tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	scene_tree->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	scene_tree->set_allow_reselect(true);
 	scene_tree->add_theme_constant_override("button_margin", 0);
 	scene_tree->add_theme_constant_override("icon_max_width", get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor)));
