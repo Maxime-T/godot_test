@@ -31,8 +31,6 @@
 #pragma once
 
 #include "editor/scene/scene_tree_editor.h"
-#include "scene/gui/box_container.h"
-#include "scene/gui/check_box.h"
 
 class SceneTreeSelector : public VBoxContainer {
 	GDCLASS(SceneTreeSelector, VBoxContainer);

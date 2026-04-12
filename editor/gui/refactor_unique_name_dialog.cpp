@@ -36,10 +36,12 @@
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
 #include "editor/script/script_editor_plugin.h"
+#include "editor/themes/editor_scale.h"
+#include "scene/gui/box_container.h"
+#include "scene/gui/check_box.h"
 #include "scene/main/scene_tree.h"
 
-#include <editor/themes/editor_scale.h>
-#include <modules/gdscript/gdscript.h>
+#include "modules/gdscript/gdscript.h"
 
 RefactorUniqueNameDialog::RefactorUniqueNameDialog() {
 	set_ok_button_text(TTRC("Rename in scripts"));
