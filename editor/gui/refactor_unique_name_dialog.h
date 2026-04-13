@@ -32,6 +32,8 @@
 
 #include "editor/scene/scene_tree_editor.h"
 
+class EditorValidationPanel;
+
 class SceneTreeSelector : public VBoxContainer {
 	GDCLASS(SceneTreeSelector, VBoxContainer);
 
@@ -53,6 +55,9 @@ class SceneTreeSelector : public VBoxContainer {
 	void _reset();
 	void _update_subtree(Node *p_node);
 
+protected:
+	static void _bind_methods();
+
 public:
 	void clear();
 	void create(Node *p_root, Vector<ObjectID> p_selectable_nodes);
@@ -63,6 +68,9 @@ public:
 
 class RefactorUniqueNameDialog : public ConfirmationDialog {
 	GDCLASS(RefactorUniqueNameDialog, ConfirmationDialog);
+	enum {
+		MSG_ID_SCRIPTS = 0,
+	};
 
 	struct RefactorData {
 		Vector<ObjectID> nodes_to_consider;
@@ -72,12 +80,14 @@ class RefactorUniqueNameDialog : public ConfirmationDialog {
 
 	Vector<RefactorData> refactor_queue;
 	Label *label = nullptr;
+	EditorValidationPanel *validation_panel = nullptr;
 
 	SceneTreeSelector *scene_tree_selector = nullptr;
 
 	Node *get_scene_root() const;
 
 	void _next();
+	void _update_validation_panel();
 	void _refactor_unique_name(RefactorData p_refactor_data);
 	void _notification(int p_what);
 	Vector<ObjectID> _get_nodes_to_refactor(const StringName &p_old_name);

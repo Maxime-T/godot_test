@@ -32,9 +32,11 @@
 
 #include "core/io/resource_saver.h"
 #include "core/object/callable_mp.h"
+#include "core/object/class_db.h"
 #include "core/object/script_language.h"
 #include "editor/editor_node.h"
 #include "editor/editor_string_names.h"
+#include "editor/gui/editor_validation_panel.h"
 #include "editor/script/script_editor_plugin.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
@@ -44,19 +46,30 @@
 #include "modules/gdscript/gdscript.h"
 
 RefactorUniqueNameDialog::RefactorUniqueNameDialog() {
-	set_ok_button_text(TTRC("Rename in scripts"));
+	set_title(TTRC("Refactor Unique Name"));
+	set_ok_button_text(TTRC("Update selected scripts"));
 
 	VBoxContainer *vbox = memnew(VBoxContainer);
+	vbox->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	vbox->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	add_child(vbox);
 
 	label = memnew(Label);
 	label->set_focus_mode(Control::FOCUS_ACCESSIBILITY);
 	vbox->add_child(label);
 
+	validation_panel = memnew(EditorValidationPanel);
+	validation_panel->set_v_size_flags(Control::SIZE_FILL);
+	validation_panel->add_line(MSG_ID_SCRIPTS);
+	validation_panel->set_update_callback(callable_mp(this, &RefactorUniqueNameDialog::_update_validation_panel));
+
 	scene_tree_selector = memnew(SceneTreeSelector);
 	scene_tree_selector->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	scene_tree_selector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	scene_tree_selector->connect("selection_changed", callable_mp(validation_panel, &EditorValidationPanel::update));
+
 	vbox->add_child(scene_tree_selector);
+	vbox->add_child(validation_panel);
 }
 
 void RefactorUniqueNameDialog::add_refactor(const StringName &p_old_name, const StringName &p_new_name) {
@@ -72,8 +85,57 @@ void RefactorUniqueNameDialog::_next() {
 		return;
 	}
 	const RefactorData &refactor_data = refactor_queue[0];
-	label->set_text(vformat(TTR("Unique node renamed: %s -> %s"), refactor_data.old_name, refactor_data.new_name));
+	if (refactor_data.nodes_to_consider.is_empty()) {
+		_refactor_unique_name(refactor_data);
+		refactor_queue.remove_at(0);
+		return _next();
+	}
+	label->set_text(vformat(TTRC("Node with unique name \"%s\" was renamed \"%s\" \nSelect script(s) to update"),
+			refactor_data.old_name,
+			refactor_data.new_name));
 	popup_refactor();
+}
+
+void RefactorUniqueNameDialog::_update_validation_panel() {
+	if (refactor_queue.is_empty()) {
+		validation_panel->set_message(MSG_ID_SCRIPTS, "", EditorValidationPanel::MSG_INFO);
+		return;
+	}
+
+	Vector<Node *> selected_nodes = scene_tree_selector->get_selected_nodes();
+	HashSet<String> selected_script_paths;
+
+	for (int i = 0; i < selected_nodes.size(); i++) {
+		Ref<Script> script = selected_nodes[i]->get_script();
+		if (!script.is_valid()) {
+			continue;
+		}
+
+		const String path = script->get_path();
+		if (path.is_empty()) {
+			continue;
+		}
+
+		selected_script_paths.insert(path);
+	}
+
+	if (selected_script_paths.is_empty()) {
+		validation_panel->set_message(MSG_ID_SCRIPTS, TTRC("No script files selected."), EditorValidationPanel::MSG_OK, false);
+		return;
+	}
+
+	Vector<String> script_paths;
+	for (const String &path : selected_script_paths) {
+		script_paths.push_back(path);
+	}
+	script_paths.sort();
+
+	String message = vformat(TTRC("Script files to update (%d):"), script_paths.size());
+	for (int i = 0; i < script_paths.size(); i++) {
+		message += String(U"\n•  ") + script_paths[i];
+	}
+
+	validation_panel->set_message(MSG_ID_SCRIPTS, message, EditorValidationPanel::MSG_OK, false);
 }
 
 void RefactorUniqueNameDialog::ok_pressed() {
@@ -107,8 +169,10 @@ void RefactorUniqueNameDialog::_refactor_unique_name(RefactorData refactor_data)
 
 	Vector<Node *> selected_nodes = scene_tree_selector->get_selected_nodes();
 	for (int i = 0; i < refactor_data.nodes_to_consider.size(); i++) {
-		Node *n = Object::cast_to<Node>(ObjectDB::get_instance(refactor_data.nodes_to_consider[i]));
-		if (!n || !selected_nodes.has(n)) {
+		Object *obj = ObjectDB::get_instance(refactor_data.nodes_to_consider[i]);
+		Node *n = Object::cast_to<Node>(obj);
+		ERR_CONTINUE_MSG(!n, "Node with instance ID " + itos(refactor_data.nodes_to_consider[i]) + " no longer exists. Skipping Refactor");
+		if (!selected_nodes.has(n)) {
 			continue;
 		}
 
@@ -143,6 +207,7 @@ void RefactorUniqueNameDialog::_notification(int p_what) {
 			}
 			scene_tree_selector->set_marked(marked);
 			scene_tree_selector->create(get_scene_root(), refactor_data.nodes_to_consider);
+			validation_panel->update();
 		} break;
 	}
 }
@@ -179,7 +244,9 @@ Vector<ObjectID> RefactorUniqueNameDialog::_get_nodes_to_refactor(const StringNa
 void SceneTreeSelector::_add_item(Node *p_parent, Node *p_node, int p_index) {
 	TreeItem *parent_item = nullptr;
 	if (p_parent && node_item_map.has(p_parent->get_instance_id())) {
-		parent_item = Object::cast_to<TreeItem>(ObjectDB::get_instance(node_item_map.get(p_parent->get_instance_id())));
+		Object *obj = ObjectDB::get_instance(node_item_map.get(p_parent->get_instance_id()));
+		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for p_parent node: " + p_parent->get_name());
+		parent_item = Object::cast_to<TreeItem>(obj);
 	}
 	TreeItem *item = scene_tree->create_item(parent_item, p_index);
 	node_item_map.insert(p_node->get_instance_id(), item->get_instance_id());
@@ -226,22 +293,35 @@ void SceneTreeSelector::_on_item_edited() {
 		} else {
 			selected_nodes.erase(id);
 		}
+		emit_signal("selection_changed");
 	}
 }
 
 void SceneTreeSelector::_on_select_all_toggled(bool p_pressed) {
 	selected_nodes.clear();
 	for (const KeyValue<ObjectID, ObjectID> &E : node_item_map) {
-		if (selectable_nodes.has(E.key)) {
-			TreeItem *item = Object::cast_to<TreeItem>(ObjectDB::get_instance(E.value));
-			if (item) {
-				item->set_checked(0, p_pressed);
-			}
-			if (p_pressed) {
-				selected_nodes.push_back(E.key);
-			}
+		if (!selectable_nodes.has(E.key)) {
+			continue;
+		}
+
+		Object *obj = ObjectDB::get_instance(E.value);
+		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for node with instance ID: " + itos(E.key));
+		TreeItem *item = Object::cast_to<TreeItem>(obj);
+		if (!item) {
+			continue;
+		}
+
+		item->set_checked(0, p_pressed);
+		if (p_pressed) {
+			selected_nodes.push_back(E.key);
 		}
 	}
+
+	emit_signal("selection_changed");
+}
+
+void SceneTreeSelector::_bind_methods() {
+	ADD_SIGNAL(MethodInfo("selection_changed"));
 }
 
 void SceneTreeSelector::_reset() {
@@ -282,6 +362,7 @@ Vector<Node *> SceneTreeSelector::get_selected_nodes() const {
 	Vector<Node *> nodes;
 	for (int i = 0; i < selected_nodes.size(); i++) {
 		Object *obj = ObjectDB::get_instance(selected_nodes[i]);
+		ERR_CONTINUE_MSG(!obj, "Node not found for instance ID: " + itos(selected_nodes[i]));
 		Node *node = Object::cast_to<Node>(obj);
 		if (node) {
 			nodes.push_back(node);
