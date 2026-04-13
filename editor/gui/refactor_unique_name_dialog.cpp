@@ -45,6 +45,156 @@
 
 #include "modules/gdscript/gdscript.h"
 
+void SceneTreeSelector::_add_item(Node *p_parent, Node *p_node, int p_index) {
+	TreeItem *parent_item = nullptr;
+	if (p_parent && node_item_map.has(p_parent->get_instance_id())) {
+		Object *obj = ObjectDB::get_instance(node_item_map.get(p_parent->get_instance_id()));
+		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for p_parent node: " + p_parent->get_name());
+		parent_item = Object::cast_to<TreeItem>(obj);
+	}
+	TreeItem *item = scene_tree->create_item(parent_item, p_index);
+	node_item_map.insert(p_node->get_instance_id(), item->get_instance_id());
+	item_node_map.insert(item->get_instance_id(), p_node->get_instance_id());
+
+	if (selectable_nodes.has(p_node->get_instance_id())) {
+		item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
+		item->set_selectable(0, true);
+		item->set_editable(0, true);
+	} else {
+		item->set_cell_mode(0, TreeItem::CELL_MODE_STRING);
+		item->set_selectable(0, false);
+		item->set_editable(0, false);
+	}
+	item->set_text(0, p_node->get_name());
+	item->set_icon(0, EditorNode::get_singleton()->get_object_icon(p_node));
+
+	Ref<Script> scr = p_node->get_script();
+	if (scr.is_valid()) {
+		item->add_button(0, get_editor_theme_icon(SNAME("Script")));
+		item->set_button_disabled(0, item->get_button_count(0) - 1, true);
+	}
+
+	if (marked_nodes.has(p_node->get_instance_id())) {
+		item->set_custom_color(0, get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
+	} else if (!selectable_nodes.has(p_node->get_instance_id())) {
+		item->set_custom_color(0, get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
+	}
+}
+
+void SceneTreeSelector::_on_item_edited() {
+	TreeItem *edited_item = scene_tree->get_edited();
+	int edited_column = scene_tree->get_edited_column();
+
+	if (!edited_item) {
+		return;
+	}
+
+	if (edited_item->get_cell_mode(edited_column) == TreeItem::CELL_MODE_CHECK) {
+		bool is_checked = edited_item->is_checked(edited_column);
+		ObjectID id = item_node_map.get(edited_item->get_instance_id());
+		if (is_checked) {
+			selected_nodes.push_back(id);
+		} else {
+			selected_nodes.erase(id);
+		}
+		emit_signal("selection_changed");
+	}
+}
+
+void SceneTreeSelector::_on_select_all_toggled(bool p_pressed) {
+	selected_nodes.clear();
+	for (const KeyValue<ObjectID, ObjectID> &E : node_item_map) {
+		if (!selectable_nodes.has(E.key)) {
+			continue;
+		}
+
+		Object *obj = ObjectDB::get_instance(E.value);
+		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for node with instance ID: " + itos(E.key));
+		TreeItem *item = Object::cast_to<TreeItem>(obj);
+		if (!item) {
+			continue;
+		}
+
+		item->set_checked(0, p_pressed);
+		if (p_pressed) {
+			selected_nodes.push_back(E.key);
+		}
+	}
+
+	emit_signal("selection_changed");
+}
+
+void SceneTreeSelector::_bind_methods() {
+	ADD_SIGNAL(MethodInfo("selection_changed"));
+}
+
+void SceneTreeSelector::_reset() {
+	clear();
+	_add_item(nullptr, scene_root, 0);
+	_update_subtree(scene_root);
+}
+
+void SceneTreeSelector::_update_subtree(Node *p_node) {
+	for (int i = 0; i < p_node->get_child_count(); i++) {
+		Node *child = p_node->get_child(i);
+		_add_item(p_node, child, i);
+		_update_subtree(child);
+	}
+}
+
+void SceneTreeSelector::clear() {
+	scene_tree->clear();
+	item_node_map.clear();
+	node_item_map.clear();
+	selected_nodes.clear();
+}
+
+void SceneTreeSelector::create(Node *p_root, Vector<ObjectID> p_selectable_nodes) {
+	ERR_FAIL_NULL(p_root);
+	scene_root = p_root;
+	selectable_nodes = p_selectable_nodes;
+	_reset();
+	select_all_checkbox->set_pressed_no_signal(true);
+	_on_select_all_toggled(true);
+}
+
+void SceneTreeSelector::set_marked(const HashSet<ObjectID> &p_marked) {
+	marked_nodes = p_marked;
+}
+
+Vector<Node *> SceneTreeSelector::get_selected_nodes() const {
+	Vector<Node *> nodes;
+	for (int i = 0; i < selected_nodes.size(); i++) {
+		Object *obj = ObjectDB::get_instance(selected_nodes[i]);
+		ERR_CONTINUE_MSG(!obj, "Node not found for instance ID: " + itos(selected_nodes[i]));
+		Node *node = Object::cast_to<Node>(obj);
+		if (node) {
+			nodes.push_back(node);
+		}
+	}
+	return nodes;
+}
+
+SceneTreeSelector::SceneTreeSelector() {
+	select_all_checkbox = memnew(CheckBox);
+	select_all_checkbox->set_text(TTR("Select All"));
+	add_child(select_all_checkbox);
+	select_all_checkbox->connect(SceneStringName(toggled), callable_mp(this, &SceneTreeSelector::_on_select_all_toggled));
+
+	scene_tree = memnew(Tree);
+	scene_tree->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
+	scene_tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	scene_tree->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	scene_tree->set_allow_reselect(true);
+	scene_tree->add_theme_constant_override("button_margin", 0);
+	scene_tree->add_theme_constant_override("icon_max_width", get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor)));
+	add_child(scene_tree);
+
+	scene_tree->connect("item_edited", callable_mp(this, &SceneTreeSelector::_on_item_edited));
+}
+
+// --- RefactorUniqueNameDialog ---
+
 RefactorUniqueNameDialog::RefactorUniqueNameDialog() {
 	set_title(TTRC("Refactor Unique Name"));
 	set_ok_button_text(TTRC("Update selected scripts"));
@@ -239,152 +389,4 @@ Vector<ObjectID> RefactorUniqueNameDialog::_get_nodes_to_refactor(const StringNa
 	}
 
 	return nodes_to_refactor;
-}
-
-void SceneTreeSelector::_add_item(Node *p_parent, Node *p_node, int p_index) {
-	TreeItem *parent_item = nullptr;
-	if (p_parent && node_item_map.has(p_parent->get_instance_id())) {
-		Object *obj = ObjectDB::get_instance(node_item_map.get(p_parent->get_instance_id()));
-		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for p_parent node: " + p_parent->get_name());
-		parent_item = Object::cast_to<TreeItem>(obj);
-	}
-	TreeItem *item = scene_tree->create_item(parent_item, p_index);
-	node_item_map.insert(p_node->get_instance_id(), item->get_instance_id());
-	item_node_map.insert(item->get_instance_id(), p_node->get_instance_id());
-
-	if (selectable_nodes.has(p_node->get_instance_id())) {
-		item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
-		item->set_selectable(0, true);
-		item->set_editable(0, true);
-	} else {
-		item->set_cell_mode(0, TreeItem::CELL_MODE_STRING);
-		item->set_selectable(0, false);
-		item->set_editable(0, false);
-	}
-	item->set_text(0, p_node->get_name());
-	item->set_icon(0, EditorNode::get_singleton()->get_object_icon(p_node));
-
-	Ref<Script> scr = p_node->get_script();
-	if (scr.is_valid()) {
-		item->add_button(0, get_editor_theme_icon(SNAME("Script")));
-		item->set_button_disabled(0, item->get_button_count(0) - 1, true);
-	}
-
-	if (marked_nodes.has(p_node->get_instance_id())) {
-		item->set_custom_color(0, get_theme_color(SNAME("accent_color"), EditorStringName(Editor)));
-	} else if (!selectable_nodes.has(p_node->get_instance_id())) {
-		item->set_custom_color(0, get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
-	}
-}
-
-void SceneTreeSelector::_on_item_edited() {
-	TreeItem *edited_item = scene_tree->get_edited();
-	int edited_column = scene_tree->get_edited_column();
-
-	if (!edited_item) {
-		return;
-	}
-
-	if (edited_item->get_cell_mode(edited_column) == TreeItem::CELL_MODE_CHECK) {
-		bool is_checked = edited_item->is_checked(edited_column);
-		ObjectID id = item_node_map.get(edited_item->get_instance_id());
-		if (is_checked) {
-			selected_nodes.push_back(id);
-		} else {
-			selected_nodes.erase(id);
-		}
-		emit_signal("selection_changed");
-	}
-}
-
-void SceneTreeSelector::_on_select_all_toggled(bool p_pressed) {
-	selected_nodes.clear();
-	for (const KeyValue<ObjectID, ObjectID> &E : node_item_map) {
-		if (!selectable_nodes.has(E.key)) {
-			continue;
-		}
-
-		Object *obj = ObjectDB::get_instance(E.value);
-		ERR_FAIL_NULL_MSG(obj, "TreeItem not found for node with instance ID: " + itos(E.key));
-		TreeItem *item = Object::cast_to<TreeItem>(obj);
-		if (!item) {
-			continue;
-		}
-
-		item->set_checked(0, p_pressed);
-		if (p_pressed) {
-			selected_nodes.push_back(E.key);
-		}
-	}
-
-	emit_signal("selection_changed");
-}
-
-void SceneTreeSelector::_bind_methods() {
-	ADD_SIGNAL(MethodInfo("selection_changed"));
-}
-
-void SceneTreeSelector::_reset() {
-	clear();
-	_add_item(nullptr, scene_root, 0);
-	_update_subtree(scene_root);
-}
-
-void SceneTreeSelector::_update_subtree(Node *p_node) {
-	for (int i = 0; i < p_node->get_child_count(); i++) {
-		Node *child = p_node->get_child(i);
-		_add_item(p_node, child, i);
-		_update_subtree(child);
-	}
-}
-
-void SceneTreeSelector::clear() {
-	scene_tree->clear();
-	item_node_map.clear();
-	node_item_map.clear();
-	selected_nodes.clear();
-}
-
-void SceneTreeSelector::create(Node *p_root, Vector<ObjectID> p_selectable_nodes) {
-	ERR_FAIL_NULL(p_root);
-	scene_root = p_root;
-	selectable_nodes = p_selectable_nodes;
-	_reset();
-	select_all_checkbox->set_pressed_no_signal(true);
-	_on_select_all_toggled(true);
-}
-
-void SceneTreeSelector::set_marked(const HashSet<ObjectID> &p_marked) {
-	marked_nodes = p_marked;
-}
-
-Vector<Node *> SceneTreeSelector::get_selected_nodes() const {
-	Vector<Node *> nodes;
-	for (int i = 0; i < selected_nodes.size(); i++) {
-		Object *obj = ObjectDB::get_instance(selected_nodes[i]);
-		ERR_CONTINUE_MSG(!obj, "Node not found for instance ID: " + itos(selected_nodes[i]));
-		Node *node = Object::cast_to<Node>(obj);
-		if (node) {
-			nodes.push_back(node);
-		}
-	}
-	return nodes;
-}
-
-SceneTreeSelector::SceneTreeSelector() {
-	select_all_checkbox = memnew(CheckBox);
-	select_all_checkbox->set_text(TTR("Select All"));
-	add_child(select_all_checkbox);
-	select_all_checkbox->connect(SceneStringName(toggled), callable_mp(this, &SceneTreeSelector::_on_select_all_toggled));
-
-	scene_tree = memnew(Tree);
-	scene_tree->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-	scene_tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
-	scene_tree->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-	scene_tree->set_allow_reselect(true);
-	scene_tree->add_theme_constant_override("button_margin", 0);
-	scene_tree->add_theme_constant_override("icon_max_width", get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor)));
-	add_child(scene_tree);
-
-	scene_tree->connect("item_edited", callable_mp(this, &SceneTreeSelector::_on_item_edited));
 }
